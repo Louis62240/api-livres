@@ -3,14 +3,17 @@ const app = express();
 const PORT = 3000;
 
 const bookRoutes = require("./routes/bookRoutes");
+const { swaggerUi, specs } = require("./swagger");
 
-// Middleware
 app.use(express.json());
 
-// Routes
+// Routes API
 app.use("/books", bookRoutes);
 
-// Middleware d’erreurs global
+// Swagger UI
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+
+// Middleware d’erreurs
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: "Erreur interne du serveur" });
@@ -19,4 +22,5 @@ app.use((err, req, res, next) => {
 // Lancer serveur
 app.listen(PORT, () => {
   console.log(`📚 API Livre dispo sur http://localhost:${PORT}`);
+  console.log(`📖 Doc Swagger dispo sur http://localhost:${PORT}/api-docs`);
 });
