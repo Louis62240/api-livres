@@ -3,7 +3,7 @@ const path = require('path');
 
 // Créer ou ouvrir la base de données
 const dbPath = path.join(__dirname, '../database.sqlite');
-const db = new sqlite3.Database(dbPath);
+let db = new sqlite3.Database(dbPath);
 
 // Créer la table books si elle n'existe pas
 db.serialize(() => {
@@ -32,6 +32,11 @@ db.serialize(() => {
 });
 
 class BookModel {
+  // Permettre l'injection d'une base de données (utile pour les tests)
+  static setDatabase(database) {
+    db = database;
+  }
+
   // Obtenir tous les livres
   static getAll(callback) {
     db.all("SELECT * FROM books", callback);
