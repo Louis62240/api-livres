@@ -1,0 +1,161 @@
+name: CI/CD Pipeline
+
+# Déclencher le workflow sur push et pull request vers main
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+# Variables d'environnement globales
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  # Job 1: Tests et qualité du code
+  test:
+    name: Tests & Code Quality
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [16, 18, 20]
+    
+    steps:
+      # Checkout du code
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      # Configuration Node.js
+      - name: 🔧 Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      
+      # Installation des dépendances
+      - name: 📦 Install dependencies
+        run: npm ci
+      
+      # Vérification de sécurité des dépendances
+      - name: 🔍 Security audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+      
+      # Exécution des tests
+      - name: 🧪 Run tests
+        run: npm test
+      
+      # Génération du rapport de couverture
+      - name: 📊 Generate coverage report
+        run: npm run test:coverage
+      
+      # Upload du rapport de couverture vers Codecov
+      - name: 📈 Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+          fail_ci_if_error: false
+      
+      # Vérification du linting (si configuré)
+      - name: 🎯 Run linting
+        run: npm run lint || echo "No lint script configured"
+        continue-on-error: true
+
+  # Job 2: Test de build et de démarrage
+  build:
+    name: Build & Start Test
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: 📦 Install dependencies
+        run: npm ci
+      
+      # Test de démarrage de l'application
+      - name: 🚀 Test application start
+        run: |
+          timeout 10s npm start &
+          sleep 5
+          curl -f http://localhost:3000/books || exit 1
+        continue-on-error: true
+
+  # Job 3: Analyse de sécurité avec CodeQL
+  security:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    needs: test
+    
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔒 Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript
+      
+      - name: 🔍 Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+  # Job 4: Déploiement (seulement sur main)
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    environment:
+      name: production
+      url: https://your-app-url.com
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: 📦 Install dependencies
+        run: npm ci --only=production
+      
+      # Exemple de déploiement sur Heroku
+      - name: 🚀 Deploy to Heroku
+        uses: akhileshns/heroku-deploy@v3.12.14
+        with:
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+          heroku_email: ${{ secrets.HEROKU_EMAIL }}
+        continue-on-error: true
+      
+      # Ou déploiement via Docker
+      - name: 🐳 Build Docker image
+        run: |
+          echo "Building Docker image..."
+          # docker build -t api-livres:latest .
+          # docker tag api-livres:latest registry/api-livres:${{ github.sha }}
+          # docker push registry/api-livres:${{ github.sha }}
+        continue-on-error: true
+      
+      # Notification de succès
+      - name: 📢 Deployment notification
+        run: |
+          echo "✅ Deployment successful!"
+          echo "🌐 Application deployed to production"

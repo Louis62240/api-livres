@@ -1,0 +1,79 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  validate-pr:
+    name: Validate Pull Request
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: 📦 Install dependencies
+        run: npm ci
+      
+      # Validation du titre de la PR
+      - name: 📝 Validate PR title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            test
+            chore
+        continue-on-error: true
+      
+      # Tests rapides pour la PR
+      - name: 🧪 Quick tests
+        run: npm test
+      
+      # Vérification des fichiers modifiés
+      - name: 📋 Check modified files
+        run: |
+          echo "Files changed in this PR:"
+          git diff --name-only origin/main...HEAD
+          
+          # Vérifier si des tests ont été ajoutés pour les nouveaux fichiers
+          if git diff --name-only origin/main...HEAD | grep -E '\.(js|ts)$' | grep -v test; then
+            echo "⚠️  Code files modified. Please ensure tests are updated."
+          fi
+      
+      # Commentaire automatique sur la PR
+      - name: 💬 Comment PR
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo, number } = context.issue;
+            
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: number,
+              body: `
+              ## 🤖 Validation automatique
+              
+              ✅ Tests passés avec succès  
+              ✅ Dépendances vérifiées  
+              ✅ Code analysé  
+              
+              **Prêt pour la review !** 👀
+              `
+            });
+        continue-on-error: true

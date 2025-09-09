@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: 📦 Install dependencies
+        run: npm ci
+      
+      - name: 🧪 Run tests
+        run: npm test
+      
+      - name: 📊 Generate coverage
+        run: npm run test:coverage
+      
+      # Génération des notes de release
+      - name: 📝 Generate release notes
+        id: release-notes
+        run: |
+          echo "## 🚀 Nouveautés" > release-notes.md
+          echo "" >> release-notes.md
+          
+          # Récupérer les commits depuis le dernier tag
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            echo "### 📋 Changements depuis $LAST_TAG" >> release-notes.md
+            git log --pretty=format:"- %s (%an)" $LAST_TAG..HEAD >> release-notes.md
+          else
+            echo "### 📋 Changements" >> release-notes.md
+            git log --pretty=format:"- %s (%an)" --max-count=20 >> release-notes.md
+          fi
+          
+          echo "" >> release-notes.md
+          echo "### 📊 Statistiques" >> release-notes.md
+          echo "- ✅ $(npm test 2>&1 | grep -o '[0-9]* passed' | head -1 || echo 'Tests passés')" >> release-notes.md
+          echo "- 📦 Version Node.js supportée: 16, 18, 20" >> release-notes.md
+          echo "- 🗄️  Base de données: SQLite" >> release-notes.md
+      
+      # Création de l'archive
+      - name: 📦 Create release archive
+        run: |
+          # Créer une archive propre du projet
+          mkdir -p release-package
+          cp -r controllers models routes *.js package*.json release-package/
+          tar -czf api-livres-${GITHUB_REF#refs/tags/}.tar.gz release-package/
+          zip -r api-livres-${GITHUB_REF#refs/tags/}.zip release-package/
+      
+      # Création de la release GitHub
+      - name: 🎉 Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release-notes.md
+          files: |
+            api-livres-*.tar.gz
+            api-livres-*.zip
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      # Publication sur npm (optionnel)
+      - name: 📤 Publish to npm
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          npm publish --access public || echo "NPM publish skipped"
+        continue-on-error: true
+        if: ${{ secrets.NPM_TOKEN }}
+  
+  # Notification
+  notify:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: create-release
+    
+    steps:
+      - name: 📢 Send notification
+        run: |
+          echo "🎉 Nouvelle release créée: ${GITHUB_REF#refs/tags/}"
+          echo "📥 Téléchargeable sur: https://github.com/${{ github.repository }}/releases"

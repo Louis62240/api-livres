@@ -1,0 +1,49 @@
+{
+  "name": "api-livres",
+  "description": "API REST pour la gestion de livres avec SQLite et tests unitaires",
+  "keywords": [
+    "nodejs",
+    "express",
+    "api",
+    "rest",
+    "sqlite",
+    "books",
+    "crud"
+  ],
+  "repository": "https://github.com/Louis62240/api-livres",
+  "logo": "https://cdn.iconscout.com/icon/free/png-256/books-2-111515.png",
+  "success_url": "/books",
+  "scripts": {
+    "postdeploy": "echo 'Deployment successful! API is running.'"
+  },
+  "env": {
+    "NODE_ENV": {
+      "description": "Node environment",
+      "value": "production"
+    },
+    "PORT": {
+      "description": "Port number",
+      "value": "3000"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:mini",
+      "options": {
+        "version": "14"
+      }
+    }
+  ],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "stack": "heroku-22"
+}
